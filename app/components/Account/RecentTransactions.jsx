@@ -16,6 +16,7 @@ const {operations} = grapheneChainTypes;
 const alignLeft = {textAlign: "left"};
 import report from "bitshares-report";
 import LoadingIndicator from "../LoadingIndicator";
+import {Apis} from "bitsharesjs-ws";
 const ops = Object.keys(operations);
 
 function compareOps(b, a) {
@@ -224,39 +225,92 @@ class RecentTransactions extends React.Component {
         });
     }
 
+    getAccountHistory(account_id, stop, limit, start) {
+        return new Promise(function(resolve, reject) {
+            Apis.instance()
+                .history_api()
+                .exec("get_account_history", [account_id, stop, limit, start])
+                .then(function(operations) {
+                    resolve(operations);
+                })
+                .catch(err => {
+                    console.error(err);
+                    resolve([]);
+                });
+        });
+    }
+
+    async getBlockTime(block_num) {
+        return Apis.instance()
+            .db_api()
+            .exec("get_block_header", [block_num]);
+    }
+
+    async resolveBlock(record) {
+        if (!!record.block_time) {
+            return record;
+        }
+        let block = await this.getBlockTime(record.block_num);
+        record.block_time = block.timestamp;
+        return record;
+    }
+
     async _generateCSV() {
         if (__DEV__) {
-            console.log("intializing fetching of ES data");
+            console.log("intializing fetching of history data");
         }
         this.setState({fetchingAccountHistory: true});
-        let start = 0,
-            limit = 150;
+        let start = "1.11.-1",
+            limit = 100;
         let account = this.props.accountsList[0].get("id");
         let accountName = (await FetchChain("getAccount", account)).get("name");
         let recordData = {};
 
         while (true) {
-            let res = await this._getAccountHistoryES(account, limit, start);
+            if (__DEV__) {
+                console.log("fetching ", account, start, limit);
+            }
+            let res = await this.getAccountHistory(
+                account,
+                "1.11.0",
+                limit,
+                start
+            );
             if (!res.length) break;
+
+            if (start == res[res.length - 1].id) {
+                break;
+            }
+
+            start = res[res.length - 1].id;
 
             await report.resolveBlockTimes(res);
 
             /* Before parsing results we need to know the asset info (precision) */
             await report.resolveAssets(res);
 
-            res.map(function(record) {
+            res = await Promise.all(res.map(this.resolveBlock.bind(this)));
+
+            res.map(record => {
                 const trx_id = record.id;
-                // let timestamp = api.getBlock(record.block_num);
-                const type = ops[record.op.type];
-                const data = record.op.data;
+                let type = ops[record.op.type];
+                let data = record.op.data;
+                if (record.op.length == 2) {
+                    type = ops[record.op[0]];
+                    data = record.op[1];
+                }
 
                 switch (type) {
                     case "vesting_balance_withdraw":
-                        data.amount = data.amount_;
+                        if (!!data.amount_) {
+                            data.amount = data.amount_;
+                        }
                         break;
 
                     case "transfer":
-                        data.amount = data.amount_;
+                        if (!!data.amount_) {
+                            data.amount = data.amount_;
+                        }
                         break;
                 }
 
@@ -269,8 +323,6 @@ class RecentTransactions extends React.Component {
                         };
                 }
             });
-
-            start += res.length;
         }
         if (!Object.keys(recordData).length) {
             return this.setState({
@@ -282,6 +334,9 @@ class RecentTransactions extends React.Component {
         let parsedData = report.parseData(recordData, account, accountName);
         let csvString = "";
         for (let line of parsedData) {
+            if (line !== parsedData[0]) {
+                line[line.length - 1] = line[line.length - 1].toUTCString();
+            }
             csvString += line.join(",") + "\n";
         }
         let blob = new Blob([csvString], {type: "text/csv;charset=utf-8"});
