@@ -252,6 +252,7 @@ class RecentTransactions extends React.Component {
         }
         let block = await this.getBlockTime(record.block_num);
         record.block_time = block.timestamp;
+        record.block = block;
         return record;
     }
 
@@ -319,7 +320,9 @@ class RecentTransactions extends React.Component {
                         recordData[trx_id] = {
                             timestamp: new Date(record.block_time),
                             type,
-                            data
+                            data,
+                            identifier:
+                                record.block_num + "/" + record.trx_in_block
                         };
                 }
             });
@@ -333,9 +336,14 @@ class RecentTransactions extends React.Component {
         recordData = report.groupEntries(recordData);
         let parsedData = report.parseData(recordData, account, accountName);
         let csvString = "";
-        for (let line of parsedData) {
+        let i;
+        for (i = 0; i < parsedData.length; i++) {
+            let line = parsedData[i];
             if (line !== parsedData[0]) {
                 line[line.length - 1] = line[line.length - 1].toUTCString();
+                line.push(recordData[Object.keys(recordData)[i]].identifier);
+            } else {
+                line.push("Block/Tx");
             }
             csvString += line.join(",") + "\n";
         }
