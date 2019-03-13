@@ -1,7 +1,10 @@
 import React from "react";
 import Translate from "react-translate-component";
 import utils from "common/utils";
-import {requestDepositAddress} from "common/gatewayMethods";
+import {
+    requestDepositAddress,
+    fetchIntermediateAddress
+} from "common/gatewayMethods";
 import BlockTradesDepositAddressCache from "common/BlockTradesDepositAddressCache";
 import CopyButton from "../Utility/CopyButton";
 import Icon from "../Icon/Icon";
@@ -19,6 +22,8 @@ import {getGatewayStatusByAsset} from "common/gatewayUtils";
 import CryptoLinkFormatter from "../Utility/CryptoLinkFormatter";
 import counterpart from "counterpart";
 import {Modal, Button} from "bitshares-ui-style-guide";
+
+const OPENLEDGER_GATEWAY = "OPEN";
 
 class DepositModalContent extends DecimalChecker {
     constructor() {
@@ -115,19 +120,9 @@ class DepositModalContent extends DecimalChecker {
         };
     }
 
-    _getDepositAddress(selectedAsset, selectedGateway) {
-        let {account} = this.props;
-        let {gatewayStatus} = this.state;
-
-        this.setState({
-            fetchingAddress: true,
-            depositAddress: null,
-            gatewayStatus: getGatewayStatusByAsset.call(this, selectedAsset)
-        });
-
-        // Get Backing Asset for Gateway
-        let backingAsset = this.props.backedCoins
-            .get(selectedGateway.toUpperCase(), [])
+    getBackedAsset(selectedGateway, selectedAsset) {
+        return this.props.backedCoins
+            .get(selectedGateway, [])
             .find(c => {
                 let backingCoin = c.backingCoinType || c.backingCoin;
 
@@ -139,6 +134,30 @@ class DepositModalContent extends DecimalChecker {
                     backingCoin.toUpperCase() === selectedAsset.toUpperCase()
                 );
             });
+    }
+
+    _getDepositAddress(selectedAsset, selectedGateway) {
+        let {account} = this.props;
+        let {gatewayStatus} = this.state;
+
+        this.setState({
+            fetchingAddress: true,
+            depositAddress: null,
+            gatewayStatus: getGatewayStatusByAsset.call(this, selectedAsset)
+        });
+
+        let backingAsset;
+        if (selectedGateway.toUpperCase() === OPENLEDGER_GATEWAY) {
+            backingAsset = this.getBackedAsset("newApi", selectedAsset);
+        }
+
+        // Get Backing Asset for Gateway
+        if (!backingAsset) {
+            backingAsset = this.getBackedAsset(
+                selectedGateway.toUpperCase(),
+                selectedAsset
+            );
+        }
 
         if (!backingAsset) {
             console.log(selectedGateway + " does not support " + selectedAsset);
@@ -176,7 +195,18 @@ class DepositModalContent extends DecimalChecker {
                 fetchingAddress: false
             });
         } else {
-            if (!depositAddress) {
+            if (backingAsset.isNewApi) {
+                fetchIntermediateAddress(
+                    backingAsset.deposit.exchangeId,
+                    account,
+                    ""
+                ).then(value => {
+                    this.setState({
+                        depositAddress: value,
+                        fetchingAddress: false
+                    });
+                });
+            } else if (!depositAddress) {
                 const assetName =
                     backingAsset.backingCoinType || backingAsset.backingCoin;
                 const fullAssetName = backingAsset.symbol;
@@ -261,6 +291,10 @@ class DepositModalContent extends DecimalChecker {
         }
         //let maxDeposit = backingAsset.maxAmount ? backingAsset.maxAmount : null;
 
+        const hasMemo = backingAsset && backingAsset.isNewApi ?
+            backingAsset.deposit.memo.enabled :
+            depositAddress && depositAddress.memo;
+
         const QR = isAddressValid ? (
             <CryptoLinkFormatter
                 size={140}
@@ -312,7 +346,7 @@ class DepositModalContent extends DecimalChecker {
                                 gatewayStatus[selectedGateway].options
                                     .enabled)) &&
                         isAddressValid &&
-                        !depositAddress.memo ? (
+                        !hasMemo ? (
                             <div
                                 className="container-row"
                                 style={{textAlign: "center"}}
@@ -374,7 +408,7 @@ class DepositModalContent extends DecimalChecker {
                                     </div>
                                 </div>
                             </div>
-                            {depositAddress.memo ? (
+                            {hasMemo ? (
                                 <div className="grid-block container-row">
                                     <div style={{paddingRight: "1rem"}}>
                                         <CopyButton
