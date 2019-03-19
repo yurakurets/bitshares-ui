@@ -291,10 +291,6 @@ class DepositModalContent extends DecimalChecker {
         }
         //let maxDeposit = backingAsset.maxAmount ? backingAsset.maxAmount : null;
 
-        const hasMemo = backingAsset && backingAsset.isNewApi ?
-            backingAsset.deposit.memo.enabled :
-            depositAddress && depositAddress.memo;
-
         const QR = isAddressValid ? (
             <CryptoLinkFormatter
                 size={140}
@@ -346,7 +342,7 @@ class DepositModalContent extends DecimalChecker {
                                 gatewayStatus[selectedGateway].options
                                     .enabled)) &&
                         isAddressValid &&
-                        !hasMemo ? (
+                        !depositAddress.memo ? (
                             <div
                                 className="container-row"
                                 style={{textAlign: "center"}}
@@ -408,7 +404,7 @@ class DepositModalContent extends DecimalChecker {
                                     </div>
                                 </div>
                             </div>
-                            {hasMemo ? (
+                            {depositAddress.memo ? (
                                 <div className="grid-block container-row">
                                     <div style={{paddingRight: "1rem"}}>
                                         <CopyButton

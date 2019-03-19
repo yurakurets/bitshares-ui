@@ -479,6 +479,7 @@ export function validateTransfer({
     memo,
     recipient
 }) {
+    if (!recipient) return new Promise(res => res());
     const bodyString = JSON.stringify({
         amount,
         recipient,

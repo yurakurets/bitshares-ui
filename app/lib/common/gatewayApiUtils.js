@@ -2,10 +2,11 @@ function mapExchange({ depositExchange, withdrawalExchange }) {
     return {
         backingCoinType: depositExchange.source.asset,
         deposit: {
-            healthy: depositExchange.options.healthy,
-            maintenanceReason: depositExchange.options.comment,
+            healthy: depositExchange.options.healthy &&
+            depositExchange.options.status,
+            maintenanceReason: depositExchange.options.maintenance_reason,
             amount: depositExchange.amount.destination,
-            memo: depositExchange.memo.source,
+            memo: depositExchange.memo.destination,
             exchangeId: depositExchange.id
         },
         gateFee: withdrawalExchange.fee.source.value,
@@ -16,11 +17,12 @@ function mapExchange({ depositExchange, withdrawalExchange }) {
         symbol: withdrawalExchange.source.asset,
         walletType: depositExchange.source.asset,
         withdrawal: {
-            healthy: withdrawalExchange.options.healthy,
-            maintenanceReason: withdrawalExchange.options.comment,
+            healthy: withdrawalExchange.options.healthy &&
+            withdrawalExchange.options.status,
+            maintenanceReason: withdrawalExchange.options.maintenance_reason,
             limits: withdrawalExchange.limit.source,
             amount: withdrawalExchange.amount.destination,
-            memo: withdrawalExchange.memo.source,
+            memo: withdrawalExchange.memo.destination,
             exchangeId: withdrawalExchange.id
         },
         isNewApi: true,
